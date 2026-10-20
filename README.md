@@ -1,92 +1,212 @@
-# 🫀 Automated Coronary Stenosis Detection & Reporting Pipeline
+# Coronary Angiogram Frame Interpretation using Vision-Based Model
 
-## 📌 Overview
-This project implements an end-to-end deep learning and natural language processing (NLP) pipeline designed to automate the detection of coronary artery stenosis from medical imaging. By processing raw coronary angiogram videos, the system extracts critical frames, performs robust computer vision-based stenosis localization, structures the diagnostic metrics, and leverages a Large Language Model (LLM) to generate comprehensive, clinical-grade medical reports.
+> Final Year Project — Universiti Teknologi MARA (UiTM)
+> 
+> **Author:** Harith Ikhwan bin Suhaimi | 2023226656
+> **Supervisor:** Farah Syazwani Mohamed Rashid
+> **Email:** harithikhwan050604@gmail.com
 
-The pipeline transitions smoothly from raw, unstructured clinical video data to highly structured, actionable medical intelligence, serving as an advanced diagnostic decision-support system for cardiologists.
+---
 
-## 🎯 Problem Statement
-Coronary artery stenosis (the narrowing of heart arteries) is a primary indicator of cardiovascular disease. Manual assessment of coronary angiograms via visual inspection is:
-1. **Time-Consuming:** Cardiologists must review dynamic videos frame-by-frame.
-2. **Subject to Intra/Inter-Observer Variability:** Qualitative assessments of narrowing percentages can vary significantly between clinicians.
-3. **Report Generation Overhead:** Manually compiling visual findings into structured, compliant clinical narratives takes valuable time away from patient care.
+## Overview
 
-This system addresses these challenges by offering an automated, objective, and reproducible framework that detects narrowing, estimates stenosis percentages, and instantly drafts detailed clinical documentation.
+An AI-powered prototype system for automated detection and reporting of coronary artery stenosis from angiogram videos and images. The system integrates **YOLOv11n** (vision-based stenosis detection) with **Google Gemini 2.0 Flash** (clinical report generation) into a single end-to-end pipeline, accessible through a **Streamlit** web interface.
 
-## 🏗️ System Architecture
-The system is modularly designed into distinct vertical layers to ensure scalability, ease of optimization, and clear separation of concerns.
+This project directly addresses the limitations of manual angiogram interpretation — inter-observer variability, diagnostic fatigue, and lack of explainability — by providing cardiologists with a fast, automated, and clinician-readable AI-assisted decision support tool.
+
+---
+
+## Demo
+
+| Step | Description |
+|---|---|
+| 1 | Upload a coronary angiogram video (MP4/AVI/MOV) or image (BMP/JPG/PNG) |
+| 2 | System preprocesses each frame (Grayscale → CLAHE → Resize 512×512) |
+| 3 | YOLOv11n detects stenotic regions with bounding box and confidence score |
+| 4 | Severity is automatically classified (None / Mild / Moderate / Severe / Critical) |
+| 5 | Gemini LLM generates a structured 6-section clinical report |
+| 6 | Download the PDF report and annotated video |
+
+---
+
+## Features
+
+- **End-to-end automation** — raw angiogram input to structured clinical PDF report
+- **Real-time video processing** — frame-by-frame detection with best frame selection
+- **Severity classification** — 5 levels based on AI confidence score
+- **Explainable AI** — 6-section clinical report addressing the "black box" problem
+- **PDF export** — professional report with annotated frame, detection stats, and Gemini report
+- **Annotated video export** — processed MP4 with bounding boxes on all frames
+- **Streamlit web interface** — no installation required for end users
+
+---
+
+## Model Performance
+
+| Model | Precision | Recall | F1-Score | mAP@0.5 |
+|---|---|---|---|---|
+| YOLOv8n | 98.08% | 97.01% | 97.54% | 98.52% |
+| YOLOv10n | 97.35% | 96.63% | 96.99% | 98.74% |
+| **YOLOv11n** ✅ | **98.18%** | **97.70%** | **97.94%** | **99.07%** |
+
+> YOLOv11n was selected as the best model based on highest performance across all metrics, particularly **97.70% recall** — critical for medical screening to minimise missed stenosis cases.
+
+---
+
+## Severity Classification
+
+| Level | Confidence Threshold | Clinical Implication |
+|---|---|---|
+| None | No detection | No stenosis detected |
+| Mild | < 50% | Non-obstructive CAD — monitor |
+| Moderate | 50 – 70% | Cardiology consultation advised |
+| Severe | 70 – 90% | Urgent cardiology review required |
+| Critical | ≥ 90% | Immediate intervention required |
+
+---
+
+## Project Structure
 
 ```
-+------------+     +--------------------------+     +---------------------+
-|   Input    | --> | Frame Extraction Layer   | --> | Preprocessing Layer |
-+------------+     +--------------------------+     +---------------------+
-                                                               |
-+--------------------------+     +-------------------------+   |
-| Report Generation Layer  | <-- | Post-Processing Layer   | <--+
-+--------------------------+     +-------------------------+
-             |
-             v
-+--------------------------+
-|          Output          |
-+--------------------------+
+├── app_gemini_pdf.py          # Main application (YOLO + Gemini + PDF)
+├── app.py                     # Base app version
+├── app_gemini.py              # App with Gemini only
+├── app_gemini_vision.py       # App with vision input to Gemini
+├── train_yolo.py              # YOLOv8n training script
+├── train_yolo11.py            # YOLOv11n training script
+├── train_yolov10.py           # YOLOv10n training script
+├── train_all_models.py        # Train all models sequentially
+├── evaluate_all_models.py     # Evaluate and compare all models
+├── preprocess_dataset.py      # Grayscale + CLAHE + resize pipeline
+├── offline_augmentation.py    # Horizontal/vertical flip + jitter
+├── split_dataset.py           # 80/10/10 train/val/test split
+├── convert_to_yolo.py         # Convert dataset to YOLO format
+├── process_video.py           # Frame extraction and video rebuild
+├── post_process.py            # Post-processing utilities
+├── generate_report.py         # Standalone report generation
+└── runs/                      # Training outputs (excluded from Git)
+    └── detect/
+        └── stenosis_v2_yolo11n/
+            └── weights/
+                └── best.pt    # Best model weights
 ```
 
-### 1. Input Layer
-* **Source Data:** Coronary angiogram videos.
-* **Supported Formats:** `.mp4`, `.avi`.
+---
 
-### 2. Frame Extraction Layer
-* **Core Tool:** OpenCV (`cv2`).
-* **Mechanism:** Reads raw angiogram video streams, applies frame-sampling strategies, extracts high-quality sequence frames, and saves them safely to storage.
-* **Output:** Sequences of raw angiogram frames (`.jpg` / `.png`).
+## Installation
 
-### 3. Preprocessing Layer
-* **Techniques Applied:**
-    * **Image Resizing:** Uniformly scales frames to fulfill object detection model input dimensions.
-    * **Pixel Normalization:** Standardizes pixel intensity distributions across heterogeneous scanner inputs.
-    * **CLAHE (Contrast Limited Adaptive Histogram Equalization):** Maximizes contrast in microvascular areas, enhancing the visibility of blood vessel edges against tissue background.
-    * **Noise Reduction:** Attenuates sensor noise and artifacts without blurring clinical edges.
-* **Output:** Enhanced, high-contrast angiogram frames.
+### 1. Clone the repository
+```bash
+git clone https://github.com/harithikhwan050604-ai/Coronary-Angiogram-Frame-Interpretation.git
+cd Coronary-Angiogram-Frame-Interpretation
+```
 
-### 4. Stenosis Detection Layer
-* **Framework:** PyTorch.
-* **Core Model:** YOLOv8 (You Only Look Once v8).
-* **Mechanism:** Executes single-shot object detection across frame sequences to locate narrowing regions, draw spatial bounding boxes, calculate statistical confidence levels, and classify/regress the specific stenosis percentage category.
-* **Output:** Detected stenosis locations containing spatial bounding boxes matched with precision confidence scores.
+### 2. Create a virtual environment
+```bash
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+source .venv/bin/activate     # macOS/Linux
+```
 
-### 5. Post-Processing Layer
-* **Logic Operations:**
-    * Filters out false-positive detections below a configurable confidence threshold.
-    * Tracks and counts distinct stenosis regions over time/frames.
-    * Aggregates frame-level estimates to accurately determine the overall stenosis percentage.
-    * Formats data arrays into a serialized structural paradigm.
-* **Output JSON Schema Example:**
-    ```json
-    {
-      "frame_id": 102,
-      "stenosis_detected": true,
-      "confidence": 0.91,
-      "percentage": 0.70
-    }
-    ```
+### 3. Install dependencies
+```bash
+pip install -r requirements.txt
+```
 
-### 6. Report Generation Layer
-* **Core Model:** Flan-T5 (Fine-tuned Large Language Model).
-* **Mechanism:** Consumes the structured post-processing JSON metrics, converts quantitative parameters into fluent medical text narratives, synthesizes clinical findings, and formats a stylized draft medical summary.
-* **Output:** Synthesized text-based stenosis report.
+### 4. Download model weights
+Download `best.pt` from the [Releases](https://github.com/harithikhwan050604-ai/Coronary-Angiogram-Frame-Interpretation/releases) page and place it at:
+```
+runs/detect/stenosis_v2_yolo11n/weights/best.pt
+```
 
-### 7. Output Layer
-* **Deliverables:**
-    * Annotated angiogram frames highlighting spatial bounding boxes.
-    * Stenosis detection summaries containing maximum narrowing percentages.
-    * AI-generated, structured medical documentation.
-* **Export Formats:** Accessible as highly portable PDF files, standardized Text files, or integrated clinical report formats.
+### 5. Get a Gemini API key
+Get a free API key at [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 
-## 🛠️ Tools & Technologies
-* **Deep Learning & NLP:** PyTorch, YOLOv8, Flan-T5 (Hugging Face Transformers)
-* **Computer Vision & Image Processing:** OpenCV, NumPy, Scikit-Image (CLAHE implementation)
-* **Data Formatting & Exporting:** Python JSON Serialization, ReportLab / PDF Generation Utilities
-* **Techniques:** Object Detection, Feature Standardization, Sequence Analysis, Text Synthesis, Medical Data Restructuring
+---
 
-## 👤 Author
-**Harith Ikhwan bin Suhaimi** 📧 [harithikhwan050604@gmail.com](mailto:harithikhwan050604@gmail.com)  
+## Running the App
+
+```bash
+streamlit run app_gemini_pdf.py
+```
+
+Then open your browser at `http://localhost:8501`, paste your Gemini API key in the sidebar, and upload an angiogram video or image.
+
+---
+
+## Dataset
+
+- **Source:** [Angiographic Dataset for Stenosis Detection — Mendeley Data](https://data.mendeley.com/datasets/ydrm75xywg/1)
+- **Size:** 8,325 grayscale angiographic images from 100 patients
+- **Split:** 80% Train / 10% Validation / 10% Test
+- **Augmentation:** Horizontal flip, vertical flip, brightness/contrast jitter
+
+> The dataset is not included in this repository. Download it directly from Mendeley Data.
+
+---
+
+## Dependencies
+
+Key libraries used:
+
+```
+streamlit
+ultralytics
+opencv-python
+google-genai
+reportlab
+Pillow
+numpy
+torch
+```
+
+Install all via:
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Clinical Report Structure
+
+The Gemini-generated report follows standard radiology reporting format:
+
+1. **Examination** — procedure type and file reference
+2. **Clinical Indication** — reason for the study
+3. **Technique** — imaging method and AI preprocessing steps
+4. **Findings** — detailed description of detected stenosis
+5. **Impression** — severity summary and clinical significance
+6. **Recommendation** — suggested clinical action
+
+> ⚠️ **Disclaimer:** This system is an AI-assisted research prototype intended for educational and research purposes only. All findings must be reviewed and validated by a qualified medical professional before any clinical decision is made.
+
+---
+
+## Research Significance
+
+- **SDG 3 — Good Health and Well-Being:** Improves efficiency and accuracy of CAD diagnosis
+- **SDG 4 — Quality Education:** Assists medical students in learning angiographic interpretation through structured AI-generated reports
+
+---
+
+## Future Works
+
+- Multi-vessel localisation (LAD, RCA, LCX identification)
+- Quantitative Coronary Angiography (QCA) lumen diameter measurement
+- HL7 FHIR integration with hospital EHR systems
+- Multi-centre dataset training for improved generalisation
+
+---
+
+## License
+
+This project is developed for academic purposes as part of a Final Year Project at Universiti Teknologi MARA (UiTM). All rights reserved.
+
+---
+
+## Acknowledgements
+
+- Dataset: Mendeley Data — *Angiographic Dataset for Stenosis Detection*
+- Detection model: [Ultralytics YOLO](https://github.com/ultralytics/ultralytics)
+- Report generation: [Google Gemini API](https://aistudio.google.com)
+- UI framework: [Streamlit](https://streamlit.io)

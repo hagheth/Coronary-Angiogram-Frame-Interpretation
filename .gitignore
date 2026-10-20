@@ -1,39 +1,62 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
 # Virtual environment
 .venv/
+venv/
+env/
 
-# Model weights (too large for GitHub)
-*.pt
-
-# Datasets
+# Datasets (too large for GitHub)
 dataset/
 dataset_augmented/
 dataset_preprocessed/
 stenosis_yolo_dataset/
+stenosis_yolo_dataset_BACKUP/
 
-# Training outputs
+# Model weights
 runs/
+*.pt
+Weights/
 
-# Video files
-video_output/
-video_test/
-video_val/
+# Large media & document files
+*.pdf
+*.pptx
 *.mp4
 *.avi
 *.mov
+*.bmp
 
-# Data files
-*.csv
-*.xlsx
+# Generated output files
+pdf_content.txt
+video_output/
+video_test/
+video_val/
 
-# Logs
-*.log
+# Environment variables / API keys
+.env
+*.env
+.env.local
 
-# Temp / IDE
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE / editor
 .vscode/
+.idea/
+*.suo
+*.user
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Temporary / build files
 *.tmp
+*.log
+dist/
+build/
+*.egg-info/

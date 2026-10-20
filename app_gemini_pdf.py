@@ -201,7 +201,7 @@ st.markdown("""
 <div class="hero-wrap">
     <div class="hero-tag">AI-Powered Cardiology Tool</div>
     <h1 class="hero-title">Coronary Angiogram<br><span>Frame Interpretation</span></h1>
-    <p class="hero-sub">YOLOv8 stenosis detection &nbsp;·&nbsp; Gemini clinical report</p>
+    <p class="hero-sub">YOLO11n stenosis detection &nbsp;·&nbsp; Gemini clinical report</p>
     <hr class="hero-divider"/>
 </div>
 """, unsafe_allow_html=True)
@@ -225,7 +225,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown('<div class="sidebar-section">System Info</div>', unsafe_allow_html=True)
-    st.markdown('<span class="sidebar-badge">🤖 Detector &nbsp; YOLOv8 (local)</span>', unsafe_allow_html=True)
+    st.markdown('<span class="sidebar-badge">🤖 Detector &nbsp; YOLO11n v2 (80/10/10)</span>', unsafe_allow_html=True)
     st.markdown('<span class="sidebar-badge">✨ LLM &nbsp; gemini-2.0-flash-lite</span>', unsafe_allow_html=True)
     st.markdown('<span class="sidebar-badge">📄 Export &nbsp; PDF (ReportLab)</span>', unsafe_allow_html=True)
 
@@ -237,7 +237,7 @@ with st.sidebar:
 @st.cache_resource
 def load_yolo():
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(base_dir, "runs", "detect", "stenosis_detector", "weights", "best.pt")
+    model_path = os.path.join(base_dir, "runs", "detect", "stenosis_v2_yolo11n", "weights", "best.pt")
     return YOLO(model_path)
 
 # ── Image processing ───────────────────────────────────────────────────────────
@@ -500,7 +500,7 @@ def build_pdf(
 
     # ── Header ─────────────────────────────────────────────────────────────────
     story.append(Paragraph("CORONARY ANGIOGRAM AI ANALYSIS REPORT", title_style))
-    story.append(Paragraph("Powered by YOLOv8 + Google Gemini", subtitle_style))
+    story.append(Paragraph("Powered by YOLO11n v2 (80/10/10 split) + Google Gemini", subtitle_style))
     story.append(Paragraph(
         f"Generated: {datetime.datetime.now().strftime('%d %B %Y, %H:%M')} &nbsp;|&nbsp; "
         f"File: <b>{file_name}</b>",
@@ -719,9 +719,70 @@ if uploaded_file is not None:
     # --- Display Layout ---
     col1, col2 = st.columns([0.5, 0.5])
 
+    # ── Generate report & PDF bytes first (needed by both columns) ─────────────
+    report_text = None
+    severity_class, max_conf_pct, impression, recommendation = classify_severity(all_detections)
+
+    if api_key:
+        with st.spinner("Generating detailed report..."):
+            try:
+                report_text = generate_report_gemini(
+                    api_key,
+                    uploaded_file.name,
+                    all_detections,
+                    total_frames=total_frames,
+                    is_video=is_video,
+                )
+            except Exception as e:
+                st.error(f"❌ Gemini API error: {e}")
+                st.info("Check your API key in the sidebar or visit https://aistudio.google.com/app/apikey")
+
+    pdf_bytes = None
+    if report_text:
+        with st.spinner("Building PDF..."):
+            pdf_bytes = build_pdf(
+                file_name=uploaded_file.name,
+                is_video=is_video,
+                data=data,
+                all_detections=all_detections,
+                total_frames=total_frames,
+                severity_class=severity_class,
+                max_conf_pct=max_conf_pct,
+                impression=impression,
+                recommendation=recommendation,
+                report_text=report_text,
+                annotated_bgr=annotated_bgr,
+                top_frames_bgr=top_frames_bgr if is_video else [],
+            )
+
     with col1:
         st.markdown('<div class="section-label">Annotated Frame</div>', unsafe_allow_html=True)
         st.image(final_img, caption="Best-confidence frame · Bounding box = detected stenosis region", use_container_width=True)
+
+        # ── Download buttons below the image ──────────────────────────────────
+        st.markdown('<div class="section-label">Downloads</div>', unsafe_allow_html=True)
+
+        if pdf_bytes:
+            pdf_name = f"Stenosis_Report_{os.path.splitext(uploaded_file.name)[0]}.pdf"
+            st.download_button(
+                label="⬇️ Download PDF Report",
+                data=pdf_bytes,
+                file_name=pdf_name,
+                mime="application/pdf",
+            )
+        elif not api_key:
+            st.info("Enter your Gemini API key to enable PDF download.")
+        else:
+            st.warning("PDF will be available once the Gemini report is generated.")
+
+        if is_video:
+            with open(out_video_file.name, "rb") as vf:
+                st.download_button(
+                    label="⬇️ Download Processed Video",
+                    data=vf,
+                    file_name=f"AI_Analyzed_{uploaded_file.name}",
+                    mime="video/mp4",
+                )
 
     with col2:
         st.markdown('<div class="section-label">Detection Results</div>', unsafe_allow_html=True)
@@ -754,68 +815,10 @@ if uploaded_file is not None:
 
         st.markdown('<div class="section-label">AI Clinical Report</div>', unsafe_allow_html=True)
 
-        report_text = None
-        severity_class, max_conf_pct, impression, recommendation = classify_severity(all_detections)
-
-        if api_key:
-            with st.spinner("Generating detailed report..."):
-                try:
-                    report_text = generate_report_gemini(
-                        api_key,
-                        uploaded_file.name,
-                        all_detections,
-                        total_frames=total_frames,
-                        is_video=is_video,
-                    )
-                    st.markdown(
-                        f"<div class='report-box'>{report_text}</div>",
-                        unsafe_allow_html=True
-                    )
-                except Exception as e:
-                    st.error(f"❌ Gemini API error: {e}")
-                    st.info("Check your API key in the sidebar or visit https://aistudio.google.com/app/apikey")
-        else:
-            st.info("Enter your Gemini API key in the sidebar to generate the report.")
-
-        # ── PDF Download ───────────────────────────────────────────────────────
-        st.markdown('<div class="section-label">Export Report</div>', unsafe_allow_html=True)
-
         if report_text:
-            with st.spinner("Building PDF..."):
-                pdf_bytes = build_pdf(
-                    file_name=uploaded_file.name,
-                    is_video=is_video,
-                    data=data,
-                    all_detections=all_detections,
-                    total_frames=total_frames,
-                    severity_class=severity_class,
-                    max_conf_pct=max_conf_pct,
-                    impression=impression,
-                    recommendation=recommendation,
-                    report_text=report_text,
-                    annotated_bgr=annotated_bgr,
-                    top_frames_bgr=top_frames_bgr if is_video else [],
-                )
-
-            pdf_name = f"Stenosis_Report_{os.path.splitext(uploaded_file.name)[0]}.pdf"
-            st.download_button(
-                label="⬇️ Download PDF Report",
-                data=pdf_bytes,
-                file_name=pdf_name,
-                mime="application/pdf",
+            st.markdown(
+                f"<div class='report-box'>{report_text}</div>",
+                unsafe_allow_html=True
             )
         elif not api_key:
-            st.info("Enter your Gemini API key to enable PDF generation.")
-        else:
-            st.warning("PDF will be available once the Gemini report is generated successfully.")
-
-        # ── Video Download ─────────────────────────────────────────────────────
-        if is_video:
-            st.markdown('<div class="section-label">Processed Video</div>', unsafe_allow_html=True)
-            with open(out_video_file.name, "rb") as vf:
-                st.download_button(
-                    label="⬇️ Download Processed Angiogram Video",
-                    data=vf,
-                    file_name=f"AI_Analyzed_{uploaded_file.name}",
-                    mime="video/mp4"
-                )
+            st.info("Enter your Gemini API key in the sidebar to generate the report.")
